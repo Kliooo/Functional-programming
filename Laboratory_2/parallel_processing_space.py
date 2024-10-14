@@ -8,12 +8,12 @@ from tkinter import filedialog
 from tkinter import messagebox
 
 def analyzePhotoPart(arguments):
-    imagePart, partIndex, imageName, offsetX, offsetY = arguments
+    photoPart, partIndex, photoName, offsetX, offsetY = arguments
     
-    grayImage = cv2.cvtColor(imagePart, cv2.COLOR_BGR2GRAY)
-    blurredImage = cv2.GaussianBlur(grayImage, (5, 5), 0)
-    _, binaryImage = cv2.threshold(blurredImage, 180, 255, cv2.THRESH_BINARY)
-    contours, _ = cv2.findContours(binaryImage, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    grayphoto = cv2.cvtColor(photoPart, cv2.COLOR_BGR2GRAY)
+    blurredphoto = cv2.GaussianBlur(grayphoto, (5, 5), 0)
+    _, binaryphoto = cv2.threshold(blurredphoto, 180, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(binaryphoto, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     objectsData = []
     contourCenters = []
@@ -24,12 +24,12 @@ def analyzePhotoPart(arguments):
         centerX = x + contourWidth // 2 + offsetX
         centerY = y + contourHeight // 2 + offsetY
         
-        brightness = np.sum(grayImage[y:y + contourHeight, x:x + contourWidth])
+        brightness = np.sum(grayphoto[y:y + contourHeight, x:x + contourWidth])
         objectType = classification(contourArea, brightness)
         
         if objectType != "-":
             objectsData.append({
-                "image": imageName,
+                "photo": photoName,
                 "partIndex": partIndex + 1,
                 "coordinates": (centerX, centerY),
                 "brightness": brightness,
@@ -51,13 +51,13 @@ def classification(area, brightness):
     else:
         return "Star"
 
-def processAllImages(inputDirectory, outputXLSXPath, outputImageDir):
+def processAllphotos(inputDirectory, outputXLSXPath, outputphotoDir):
     allResults = []
 
-    for imageName in os.listdir(inputDirectory):
-        imagePath = os.path.join(inputDirectory, imageName)
-        if imagePath.lower().endswith(('.png', '.jpg')):
-            objectsData = processImage(imagePath, outputImageDir)
+    for photoName in os.listdir(inputDirectory):
+        photoPath = os.path.join(inputDirectory, photoName)
+        if photoPath.lower().endswith(('.png', '.jpg')):
+            objectsData = processphoto(photoPath, outputphotoDir)
             allResults.extend(objectsData)
 
     save(allResults, outputXLSXPath)
@@ -68,12 +68,12 @@ def save(data, outputXLSXPath):
     sheet = workbook.active
     sheet.title = "Results"
     
-    headers = ['Image', 'PartIndex', 'Coordinates', 'Brightness', 'Area', 'Type']
+    headers = ['photo', 'PartIndex', 'Coordinates', 'Brightness', 'Area', 'Type']
     sheet.append(headers)
 
     for objectData in data:
         sheet.append([ 
-            objectData['image'],
+            objectData['photo'],
             objectData['partIndex'],
             f"{objectData['coordinates'][0]}, {objectData['coordinates'][1]}",
             objectData['brightness'],
@@ -95,45 +95,47 @@ def save(data, outputXLSXPath):
 
     workbook.save(outputXLSXPath)
 
-def processImage(imagePath, outputImageDir):
-    image = cv2.imread(imagePath)
-    imageName = os.path.basename(imagePath)
+def processphoto(photoPath, outputphotoDir):
+    photo = cv2.imread(photoPath)
+    photoName = os.path.basename(photoPath)
     
-    imageOutputDir = os.path.join(outputImageDir, os.path.splitext(imageName)[0])
-    os.makedirs(imageOutputDir, exist_ok=True)
+    photoOutputDir = os.path.join(outputphotoDir, os.path.splitext(photoName)[0])
+    os.makedirs(photoOutputDir, exist_ok=True)
     
-    imageParts = splitImage(image, 1000)
+    photoParts = splitphoto(photo, 1000)
 
-    arguments = [(part, partIndex, imageName, offsetX, offsetY) 
-                 for part, offsetX, offsetY, partIndex in imageParts]
+    # Создаем аргументы для многопроцессорной обработки
+    arguments = [(part, partIndex, photoName, offsetX, offsetY) 
+                 for part, offsetX, offsetY, partIndex in photoParts]
     
+    # Создаем пул процессов для многопроцессорной обработки
     with multiprocessing.Pool(processes=16) as processPool:
-        results = processPool.map(analyzePhotoPart, arguments)
+        results = processPool.map(analyzePhotoPart, arguments)  # Параллельный анализ частей изображения
 
-    allObjectsData = []
-    for objectData, contourCenters in results:  # Теперь возвращаются и данные объектов, и контуры
+    allObjectsData = []  # Список для хранения всех данных об объектах
+    for objectData, contourCenters in results:  # Объединяем данные объектов и контуры
         allObjectsData.extend(objectData)
 
-    for (part, offsetX, offsetY, partIndex), (_, contourCenters) in zip(imageParts, results):
-        saveImagePart(part, partIndex, imageName, imageOutputDir, contourCenters)
+    for (part, offsetX, offsetY, partIndex), (_, contourCenters) in zip(photoParts, results):
+        savephotoPart(part, partIndex, photoName, photoOutputDir, contourCenters)
 
     return allObjectsData
 
-def splitImage(image, partSize):
-    imageHeight, imageWidth, _ = image.shape
-    imageParts = []
+def splitphoto(photo, partSize):
+    photoHeight, photoWidth, _ = photo.shape
+    photoParts = []
     
     partIndex = 0
-    for offsetY in range(0, imageHeight, partSize):
-        for offsetX in range(0, imageWidth, partSize):
-            part = image[offsetY:offsetY + partSize, offsetX:offsetX + partSize]
+    for offsetY in range(0, photoHeight, partSize):
+        for offsetX in range(0, photoWidth, partSize):
+            part = photo[offsetY:offsetY + partSize, offsetX:offsetX + partSize]
             if part.size > 0:
-                imageParts.append((part, offsetX, offsetY, partIndex))
+                photoParts.append((part, offsetX, offsetY, partIndex))
             partIndex += 1
 
-    return imageParts
+    return photoParts
 
-def saveImagePart(part, partIndex, imageName, outputDir, contourCenters):
+def savephotoPart(part, partIndex, photoName, outputDir, contourCenters):
     for (centerX, centerY, radius, objectType) in contourCenters:
         largerRadius = int(radius * 1.5)
         
@@ -146,30 +148,30 @@ def saveImagePart(part, partIndex, imageName, outputDir, contourCenters):
 
         cv2.circle(part, (centerX, centerY), largerRadius, color, 4)
 
-    partImageName = f"{partIndex + 1}.png"
-    partImagePath = os.path.join(outputDir, partImageName)
-    cv2.imwrite(partImagePath, part)
+    partphotoName = f"{partIndex + 1}.png"
+    partphotoPath = os.path.join(outputDir, partphotoName)
+    cv2.imwrite(partphotoPath, part)
 
 def analyze():
-    global inputDirectory, outputXLSXPath, outputImageDir
+    global inputDirectory, outputXLSXPath, outputphotoDir
     if not inputDirectory:
         inputDirectory = 'photo'
     
     if not outputXLSXPath:
         outputXLSXPath = os.path.join(os.getcwd(), 'statistic.xlsx')
 
-    outputImageDir = 'image_parts'
-    os.makedirs(outputImageDir, exist_ok=True)
+    outputphotoDir = 'photo_parts'
+    os.makedirs(outputphotoDir, exist_ok=True)
 
-    processAllImages(inputDirectory, outputXLSXPath, outputImageDir)
+    processAllphotos(inputDirectory, outputXLSXPath, outputphotoDir)
 
     messagebox.showinfo("Анализ завершен", f"Результаты сохранены в {outputXLSXPath}")
 
-def chooseImages():
+def choosephotos():
     global inputDirectory
     inputDirectory = filedialog.askdirectory()
     if inputDirectory:
-        label_selected_images.config(text=f"Выбраны изображения: {inputDirectory}")
+        label_selected_photos.config(text=f"Выбраны изображения: {inputDirectory}")
 
 def savePath():
     global outputXLSXPath
@@ -179,7 +181,7 @@ def savePath():
         label_save_path.config(text=f"Сохранить в: {outputXLSXPath}")
 
 def create_interface():
-    global btn_analyze, label_selected_images, label_save_path
+    global btn_analyze, label_selected_photos, label_save_path
     
     root = tk.Tk()
     root.title("Анализ космических данных")
@@ -192,8 +194,8 @@ def create_interface():
     y = (screen_height // 2) - (window_height // 2)
     root.geometry(f"{window_width}x{window_height}+{x}+{y}")
 
-    label_selected_images = tk.Label(root, text="Выбраны изображения: None")
-    label_selected_images.pack(pady=5)
+    label_selected_photos = tk.Label(root, text="Выбраны изображения: None")
+    label_selected_photos.pack(pady=5)
 
     label_save_path = tk.Label(root, text="Сохранить в: None")
     label_save_path.pack(pady=5)
@@ -201,8 +203,8 @@ def create_interface():
     button_frame = tk.Frame(root)
     button_frame.pack(pady=5)
 
-    btn_choose_images = tk.Button(button_frame, text="Выбрать изображения", command=chooseImages)
-    btn_choose_images.pack(side=tk.LEFT, padx=5)
+    btn_choose_photos = tk.Button(button_frame, text="Выбрать изображения", command=choosephotos)
+    btn_choose_photos.pack(side=tk.LEFT, padx=5)
 
     btn_save_path = tk.Button(button_frame, text="Сохранить путь", command=savePath)
     btn_save_path.pack(side=tk.LEFT, padx=5)
@@ -215,7 +217,7 @@ def create_interface():
 if __name__ == "__main__":
     inputDirectory = ''
     outputXLSXPath = ''
-    outputImageDir = ''
+    outputphotoDir = ''
 
     root = create_interface()
     root.mainloop()
