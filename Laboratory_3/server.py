@@ -10,6 +10,15 @@ async def handle_client(reader, writer):
         username = (await reader.readline()).decode().strip()
         room = (await reader.readline()).decode().strip()
 
+        # Если это личный чат, убедимся, что в комнате только два человека
+        if room.startswith("private_"):
+            if room in clients and len(clients[room]) > 1:
+                writer.write("Комната уже занята.\n".encode())
+                await writer.drain()
+                writer.close()
+                await writer.wait_closed()
+                return
+        
         if room not in clients:
             clients[room] = []
         clients[room].append((username, writer))
@@ -41,29 +50,25 @@ async def handle_client(reader, writer):
 
 
 async def send_active_users_to_room(room):
-    # Отправка списка активных пользователей
     if room in clients:
-        active_users = [username for username, _ in clients[room]]
-        message = f"Активные пользователи в комнате {room}: " + ", ".join(active_users)
-        await send_message_to_room(room, message)
-
-async def send_message_to_room(room, message):
-    # Отправка сообщения всем пользователям в комнате
-    if room in clients:
+        active_users = [client[0] for client in clients[room]]
+        message = f"Активные пользователи в комнате {room}: {', '.join(active_users)}\n"
         for _, writer in clients[room]:
-            writer.write(f"{message}\n".encode())
+            writer.write(message.encode())
             await writer.drain()
 
 
+async def send_message_to_room(room, message):
+    if room in clients:
+        for username, writer in clients[room]:
+            writer.write(f"{message}\n".encode())
+            await writer.drain()
+
 async def main():
-    server = await asyncio.start_server(
-        handle_client, '127.0.0.1', 8888
-    )
+    server = await asyncio.start_server(handle_client, '127.0.0.1', 8888)
     addr = server.sockets[0].getsockname()
     print(f"Сервер запущен на {addr}")
-
     async with server:
         await server.serve_forever()
 
-if __name__ == '__main__':
-    asyncio.run(main())
+asyncio.run(main())

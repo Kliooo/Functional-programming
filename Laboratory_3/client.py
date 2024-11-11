@@ -71,10 +71,10 @@ def start_client():
 def prompt_user_info():
     dialog = tk.Toplevel(root)
     dialog.title("Введите данные для подключения")
-    dialog.geometry("300x200")
+    dialog.geometry("300x250")
     dialog.grab_set()
 
-    center_window(dialog, 300, 200)
+    center_window(dialog, 300, 250)
 
     tk.Label(dialog, text="IP сервера:").pack(pady=5)
     ip_entry = tk.Entry(dialog)
@@ -89,16 +89,24 @@ def prompt_user_info():
     room_entry = tk.Entry(dialog)
     room_entry.pack()
 
+    # Добавляем чекбокс для выбора личного чата
+    private_chat_var = tk.BooleanVar()
+    private_chat_checkbox = tk.Checkbutton(dialog, text="Личный чат", variable=private_chat_var)
+    private_chat_checkbox.pack(pady=5)
+
     def on_confirm():
         global username
         ip = ip_entry.get()
         username = username_entry.get()
         room = room_entry.get()
         if ip and username and room:
+            # Если выбран личный чат, создаем уникальную комнату
+            if private_chat_var.get():
+                room = f"private_{username}"
             start_chat(ip, username, room)
             dialog.destroy()
 
-    tk.Button(dialog, text="Войти", command=on_confirm).pack(pady=10)
+    tk.Button(dialog, text="Войти", command=on_confirm).pack(pady=5)
     dialog.protocol("WM_DELETE_WINDOW", root.destroy)
 
 # Функция для отключения клиента
