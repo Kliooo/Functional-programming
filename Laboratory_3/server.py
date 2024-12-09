@@ -65,7 +65,7 @@ async def send_message_to_room(room, message):
             await writer.drain()
 
 async def main():
-    server = await asyncio.start_server(handle_client, '127.0.0.1', 8888)
+    server = await asyncio.start_server(handle_client, '0.0.0.0', 8888)
     addr = server.sockets[0].getsockname()
     print(f"Сервер запущен на {addr}")
     async with server:

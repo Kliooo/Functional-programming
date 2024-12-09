@@ -43,15 +43,17 @@ def on_send_button_click():
 
 async def register_client(ip, username, room):
     global reader, writer
-    reader, writer = await asyncio.open_connection(ip, 8888)
-    
-    writer.write(f"{username}\n".encode())
-    await writer.drain()
-    writer.write(f"{room}\n".encode())
-    await writer.drain()
+    try:
+        reader, writer = await asyncio.open_connection(ip, 8888)
+        writer.write(f"{username}\n".encode())
+        await writer.drain()
+        writer.write(f"{room}\n".encode())
+        await writer.drain()
+        print(f"Клиент {username} зарегистрирован в комнате {room}")
+        asyncio.create_task(get_messages(reader, text_widget, active_users_widget))
+    except Exception as e:
+        messagebox.showerror("Ошибка подключения", f"Не удалось подключиться к серверу: {e}")
 
-    print(f"Клиент {username} зарегистрирован в комнате {room}")
-    asyncio.create_task(get_messages(reader, text_widget, active_users_widget))
 
 def start_chat(ip, username, room):
     asyncio.run_coroutine_threadsafe(register_client(ip, username, room), asyncio_loop)
